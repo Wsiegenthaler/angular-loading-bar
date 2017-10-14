@@ -1,7 +1,7 @@
 /*! 
  * angular-loading-bar v0.9.0
  * https://chieffancypants.github.io/angular-loading-bar
- * Copyright (c) 2016 Wes Cruver
+ * Copyright (c) 2017 Wes Cruver
  * License: MIT
  */
 /*
@@ -196,10 +196,6 @@ angular.module('cfp.loadingBar', [])
        * Inserts the loading bar element into the dom, and sets it to 2%
        */
       function _start() {
-        if (!$animate) {
-          $animate = $injector.get('$animate');
-        }
-
         $timeout.cancel(completeTimeout);
 
         // do not continually broadcast the started event:
@@ -223,6 +219,7 @@ angular.module('cfp.loadingBar', [])
         $rootScope.$broadcast('cfpLoadingBar:started');
         started = true;
 
+        $animate = _getAnimate();
         if (includeBar) {
           $animate.enter(loadingBarContainer, $parent, $after);
         }
@@ -243,9 +240,12 @@ angular.module('cfp.loadingBar', [])
         if (!started) {
           return;
         }
-        var pct = (n * 100) + '%';
-        loadingBar.css('width', pct);
-        status = n;
+
+        if (status < n) {
+          var pct = (n * 100) + '%';
+          loadingBar.css('width', pct);
+          status = n;
+        }
 
         // increment loadingbar to give the illusion that there is always
         // progress but make sure to cancel the previous timeouts so we don't
@@ -264,6 +264,11 @@ angular.module('cfp.loadingBar', [])
        */
       function _inc() {
         if (_status() >= 1) {
+          var promise = _getAnimate().leave(loadingBarContainer, _completeAnimation);
+          if (promise && promise.then) {
+            promise.then(_completeAnimation);
+          }
+          $rootScope.$broadcast('cfpLoadingBar:completed');
           return;
         }
 
@@ -303,22 +308,23 @@ angular.module('cfp.loadingBar', [])
       }
 
       function _complete() {
-        if (!$animate) {
-          $animate = $injector.get('$animate');
-        }
 
         _set(1);
         $timeout.cancel(completeTimeout);
 
         // Attempt to aggregate any start/complete calls within 500ms:
         completeTimeout = $timeout(function() {
-          var promise = $animate.leave(loadingBarContainer, _completeAnimation);
-          if (promise && promise.then) {
-            promise.then(_completeAnimation);
-          }
-          $animate.leave(spinner);
+          _set(1);
+          _getAnimate().leave(spinner);
           $rootScope.$broadcast('cfpLoadingBar:completed');
         }, 500);
+      }
+
+      function _getAnimate() {
+        if (!$animate) {
+          $animate = $injector.get('$animate');
+        }
+        return $animate;
       }
 
       return {
